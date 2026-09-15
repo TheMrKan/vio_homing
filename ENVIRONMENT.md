@@ -5,10 +5,10 @@
 **ОС:** [JetPack 4.6.2 (Ubuntu 18)](https://developer.nvidia.com/embedded/jetpack-sdk-462)
 
 ## ROS
-Установлен **ROS Melodic**. Источник: [JetsonHacksNano/isntallROS](https://github.com/JetsonHacksNano/installROS)
+Установлен **ROS Melodic**, пакет `ros-melodic-desktop-full`. Источник: [JetsonHacksNano/isntallROS](https://github.com/JetsonHacksNano/installROS)
 
 Запущены оба скрипта:
-- installROS.sh
+- installROS.sh (`--package ros-melodic-desktop-full`)
 - setupCatkinWorkspace.sh
 
 ## Рабочее пространство 
@@ -18,12 +18,17 @@
 Данный репозиторий ([TheMrKan/vio-homing](https://github.com/TheMrKan/vio-homing)) склонирован сюда: `catkin_ws/src/vio-homing`.
 В нем предполагается держать весь наш исходный код, конфиги и т. д. 
 
-В `catkin_ws/src/VINS-Fusion` находится форк оригинального проекта от Андрея.
+В `catkin_ws/src/VINS-Fusion` находится форк оригинального проекта от Андрея. Основное отличие от оригинала - убрана буферизация в некоторых топиках.
 
 
 ## Другое
-- **Ceres Solver v1.12.0** собран, лежит в `/home/jetson/ceres-bin/`
-
-
-
+- **VINS Fusion** устанавливался по [официальной доке](https://github.com/hkust-aerial-robotics/vins-fusion).
+- Для него необходим **Ceres Solver**. Устанавливался по [официальной доке](http://ceres-solver.org/installation.html#linux). **Ceres Solver v1.12.0** собран, лежит в `/home/jetson/ceres-bin/`
+- **ВАЖНО!** Установка с **main** ветки репозитория Ceres Solver не работает, обязательно `git checkout 1.22.0` перед сборкой (версия **1.22.0** взята из [официального Dockerfile](https://github.com/HKUST-Aerial-Robotics/VINS-Fusion/blob/be55a937a57436548ddfb1bd324bc1e9a9e828e0/docker/Dockerfile#L3)).
+- Перед запуском `catkin_make` нужно установить через `apt-get install` следующие пакеты (взяты из [официального Dockerfile](https://github.com/HKUST-Aerial-Robotics/VINS-Fusion/blob/be55a937a57436548ddfb1bd324bc1e9a9e828e0/docker/Dockerfile#L16)):
+- - `ros-melodic-cv-bridge`
+- - `ros-melodic-image-transport`
+- - `ros-melodic-message-filters`
+- - `ros-melodic-tf`
+- - `ros-melodic-perception`
 
