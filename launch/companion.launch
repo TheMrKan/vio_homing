@@ -1,5 +1,9 @@
 <launch>
 
+  <!-- ============================== -->
+  <!-- MAVLink / Pixhawk             -->
+  <!-- ============================== -->
+
   <arg
     name="serial_port"
     default="/dev/ttyTHS1"
@@ -23,11 +27,6 @@
   <arg
     name="odom_topic"
     default="/vio/odom_frd"
-  />
-
-  <arg
-    name="odom_rate"
-    default="30.0"
   />
 
   <node
@@ -64,11 +63,6 @@
     />
 
     <param
-      name="odom_rate"
-      value="$(arg odom_rate)"
-    />
-
-    <param
       name="odom_quality"
       value="0"
     />
@@ -85,5 +79,94 @@
 
   </node>
 
-</launch>
 
+  <!-- ============================== -->
+  <!-- Ground Wi-Fi link monitor     -->
+  <!-- ============================== -->
+
+  <node
+    pkg="vio_homing"
+    type="wifi_link_monitor.py"
+    name="wifi_link_monitor"
+    output="screen"
+    respawn="true"
+    respawn_delay="2.0">
+
+    <param
+      name="bind_address"
+      value="0.0.0.0"
+    />
+
+    <param
+      name="port"
+      value="15050"
+    />
+
+    <param
+      name="ok_timeout"
+      value="0.5"
+    />
+
+    <param
+      name="lost_timeout"
+      value="3.0"
+    />
+
+    <param
+      name="publish_rate"
+      value="20.0"
+    />
+
+    <param
+      name="heartbeat_prefix"
+      value="VIO_HOMING_HEARTBEAT"
+    />
+
+  </node>
+
+
+  <!-- ============================== -->
+  <!-- Trajectory recorder           -->
+  <!-- ============================== -->
+
+  <node
+    pkg="vio_homing"
+    type="trajectory_recorder.py"
+    name="trajectory_recorder"
+    output="screen"
+    respawn="true"
+    respawn_delay="2.0">
+
+    <param
+      name="odom_topic"
+      value="$(arg odom_topic)"
+    />
+
+    <param
+      name="link_state_topic"
+      value="/vio_homing/link_state"
+    />
+
+    <param
+      name="min_point_distance"
+      value="0.25"
+    />
+
+    <param
+      name="max_point_interval"
+      value="1.0"
+    />
+
+    <param
+      name="max_points"
+      value="20000"
+    />
+
+    <param
+      name="path_publish_rate"
+      value="1.0"
+    />
+
+  </node>
+
+</launch>

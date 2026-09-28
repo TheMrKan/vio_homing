@@ -24,6 +24,8 @@ catkin_install_python(
     scripts/mavlink_imu_bridge.py
     scripts/test_odometry.py
     scripts/check_imu_timing.py
+    scripts/wifi_link_monitor.py
+    scripts/trajectory_recorder.py
   DESTINATION
     ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
