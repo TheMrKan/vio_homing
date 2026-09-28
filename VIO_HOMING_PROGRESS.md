@@ -1,16 +1,16 @@
 # VIO Homing — текущий прогресс
 
-Дата: 28.09.2026
+Обновлено: 02.10.2026
 
 Документ фиксирует текущее состояние стенда и выполненные работы по интеграции Jetson Nano, Pixhawk 6C Mini, PX4, ROS Melodic и VINS-Fusion.
 
-## 1. Текущая аппаратная схема
+## 1. Аппаратная схема
 
 ```text
 MacBook
 ├── Ethernet ─────────────── Jetson Nano
-│                            192.168.137.2
 │                            eth0
+│                            192.168.137.2/24
 │
 └── USB-C ───────────────── Pixhawk 6C Mini
                              │
@@ -29,13 +29,13 @@ RX pin 3   <----------  pin 8  TX
 GND pin 6  -----------  pin 6  GND
 ```
 
-Питание +5V с TELEM2 на Jetson не используется.
+Питание +5 V с TELEM2 на Jetson не используется.
 
 ---
 
 ## 2. Сеть Mac ↔ Jetson
 
-На Jetson настроен статический IPv4:
+Статическая сеть:
 
 ```text
 Jetson: 192.168.137.2/24
@@ -43,19 +43,21 @@ Mac:    192.168.137.1/24
 Gateway Jetson: 192.168.137.1
 ```
 
-SSH работает:
+SSH:
 
 ```bash
 ssh jetson@192.168.137.2
 ```
 
-Jetson в интернет для текущей работы не выводится. Необходимые Python-пакеты передавались офлайн с Mac через `scp`.
+Ethernet используется для разработки, SSH и тестового heartbeat.
+
+Интернет на Jetson не считается гарантированным. При отсутствии доступа изменения Git переносятся на Mac через `git bundle` + `scp`, после чего пушатся в GitHub уже с Mac.
 
 ---
 
 ## 3. ROS / VINS-Fusion
 
-На Jetson:
+Jetson:
 
 ```text
 Ubuntu 18.04.6 LTS
@@ -71,13 +73,13 @@ Catkin workspace:
 /home/jetson/catkin_ws
 ```
 
-Исходники VINS-Fusion:
+VINS-Fusion:
 
 ```text
 /home/jetson/catkin_ws/src/VINS-Fusion
 ```
 
-VINS-Fusion успешно собран. Доступны:
+VINS-Fusion собран. Доступны:
 
 ```text
 vins_node
@@ -85,9 +87,11 @@ loop_fusion_node
 global_fusion_node
 ```
 
+Камера пока физически не подключена, поэтому реальный VINS ещё не запущен в рабочем контуре.
+
 ---
 
-## 4. Репозиторий `vio_homing` превращён в ROS-пакет
+## 4. ROS-пакет `vio_homing`
 
 Репозиторий:
 
@@ -95,54 +99,47 @@ global_fusion_node
 /home/jetson/catkin_ws/src/vio_homing
 ```
 
-Добавлены:
+Основные файлы:
 
 ```text
 package.xml
 CMakeLists.txt
-launch/
+launch/companion.launch
+
 scripts/
-config/
+├── mavlink_imu_bridge.py
+├── check_imu_timing.py
+├── test_odometry.py
+├── wifi_link_monitor.py
+└── trajectory_recorder.py
 ```
 
-Пакет успешно собирается через:
+Сборка:
 
 ```bash
 cd ~/catkin_ws
 catkin_make
-```
-
-ROS видит пакет:
-
-```bash
-rospack find vio_homing
+source ~/catkin_ws/devel/setup.bash
 ```
 
 ---
 
 ## 5. MAVLink Pixhawk ↔ Jetson
 
-Физический UART проверен и работает.
-
-Первоначально использовалась скорость `921600`, но поток содержал большое количество повреждённых MAVLink-пакетов (`BAD_DATA`).
-
-Рабочая стабильная скорость:
+UART стабильно работает на:
 
 ```text
 115200 baud
 ```
 
-Jetson:
+Порты:
 
 ```text
-/dev/ttyTHS1
+Jetson: /dev/ttyTHS1
+PX4:    /dev/ttyS3
 ```
 
-PX4 / TELEM2:
-
-```text
-/dev/ttyS3
-```
+На `921600` наблюдалось большое количество `BAD_DATA`, поэтому рабочая скорость оставлена `115200`.
 
 Подтверждена двусторонняя MAVLink-связь:
 
@@ -151,15 +148,11 @@ Pixhawk -> Jetson
 Jetson  -> Pixhawk
 ```
 
-В частности, с Jetson успешно запрашивался и принимался `AUTOPILOT_VERSION`.
-
 ---
 
-## 6. Постоянная конфигурация PX4 для companion computer
+## 6. Постоянная конфигурация PX4
 
-TELEM2 настроен как отдельный MAVLink-канал companion computer.
-
-Используемая конфигурация:
+TELEM2 настроен как MAVLink-канал companion computer.
 
 ```text
 MAV_1_CONFIG     = TELEM 2
@@ -170,13 +163,13 @@ SER_TEL2_BAUD    = 115200
 MAV_PROTO_VER    = 2
 ```
 
-Чтобы после загрузки PX4 не вводить вручную команды через QGroundControl, на microSD создан:
+На microSD Pixhawk создан:
 
 ```text
 /fs/microsd/etc/extras.txt
 ```
 
-Содержимое:
+Текущий набор streams:
 
 ```sh
 set +e
@@ -189,51 +182,21 @@ mavlink stream -d /dev/ttyS3 -s LOCAL_POSITION_NED -r 10
 set -e
 ```
 
-После перезагрузки Pixhawk поток `HIGHRES_IMU` поднимается автоматически.
+После загрузки PX4 `HIGHRES_IMU` поднимается автоматически.
 
-Проверенная фактическая частота:
+Фактическая частота:
 
 ```text
 ~100 Hz
 ```
 
----
-
-## 7. Offline pymavlink
-
-Так как Jetson работает без доступа в интернет, зависимости устанавливались офлайн.
-
-Для Python 3 установлены:
-
-```text
-future 1.0.0
-pyserial 3.5
-pymavlink 2.4.41
-```
-
-Для Python 2 / ROS Melodic установлены:
-
-```text
-pip 20.3.4
-future 0.18.3
-pymavlink 2.4.31
-```
-
-Проверено совместное использование в Python 2:
-
-```python
-import rospy
-import serial
-import numpy
-import future
-from pymavlink import mavutil
-```
+Текущий набор streams — минимальный стендовый. Перед полётными испытаниями нужно определить окончательный набор GPS/attitude/estimator/battery данных с учётом ограничения `115200 baud`.
 
 ---
 
-## 8. MAVLink → ROS IMU bridge
+## 7. MAVLink → ROS IMU bridge
 
-Создан ROS/Python bridge:
+Рабочий bridge:
 
 ```text
 scripts/mavlink_imu_bridge.py
@@ -242,18 +205,12 @@ scripts/mavlink_imu_bridge.py
 Он:
 
 1. открывает `/dev/ttyTHS1` на `115200`;
-2. принимает MAVLink от PX4;
-3. читает `HIGHRES_IMU`;
-4. выполняет преобразование осей MAVLink FRD → ROS FLU;
-5. публикует `sensor_msgs/Imu`;
-6. выполняет синхронизацию времени Pixhawk ↔ Jetson через MAVLink `TIMESYNC`;
-7. принимает ROS odometry и отправляет её обратно в PX4 через MAVLink `ODOMETRY`.
-
-ROS IMU topic:
-
-```text
-/pixhawk/imu
-```
+2. принимает `HIGHRES_IMU`;
+3. преобразует MAVLink FRD → ROS FLU;
+4. публикует `/pixhawk/imu`;
+5. выполняет MAVLink `TIMESYNC`;
+6. принимает ROS `Odometry`;
+7. отправляет каждое новое odometry-сообщение в PX4 через MAVLink `ODOMETRY`.
 
 Преобразование осей IMU:
 
@@ -266,11 +223,9 @@ Z down       ->   -Z up
 
 ---
 
-## 9. Проверка частоты и timestamp IMU
+## 8. Проверка IMU timing
 
-Проведён тест 1000 сообщений.
-
-Результат:
+Тест 1000 сообщений:
 
 ```text
 Samples:        1000
@@ -283,85 +238,55 @@ Gaps > 15 ms:   1
 Bad timestamps: 0
 ```
 
-Также `rostopic hz /pixhawk/imu` показывает среднюю частоту около 100 Hz.
-
-Главный результат:
+Итог:
 
 ```text
-частота ~100 Hz
-монотонные timestamps
+IMU ~100 Hz
+timestamps монотонные
 Bad timestamps = 0
 ```
 
 ---
 
-## 10. TIMESYNC Pixhawk ↔ Jetson
+## 9. TIMESYNC
 
 В bridge реализован MAVLink `TIMESYNC`.
 
-Схема:
-
-```text
-PX4 clock
-   │
-   │ TIMESYNC
-   ▼
-Jetson clock
-   │
-   ▼
-ROS header.stamp
-```
-
 Используется медиана последних 30 валидных измерений offset.
 
-Пример наблюдаемого offset:
+Большое абсолютное значение offset ожидаемо, потому что PX4 и Jetson используют разные временные базы.
 
-```text
--1790603484775.xxx ms
-```
-
-Большое абсолютное значение ожидаемо: PX4 и Jetson используют разные временные эпохи.
-
-Offset в тесте менялся в пределах нескольких миллисекунд и считался достаточно стабильным для первого стендового VIO-прототипа.
+В тестах offset менялся в пределах нескольких миллисекунд, что достаточно для текущего стендового VIO-прототипа.
 
 ---
 
-## 11. ROS Odometry → MAVLink ODOMETRY → PX4
+## 10. ROS Odometry → MAVLink ODOMETRY → PX4
 
-Реализован обратный канал:
+Реализован и проверен канал:
 
 ```text
 ROS /vio/odom_frd
-        │
-        ▼
+        ↓
 mavlink_imu_bridge.py
-        │
-        ▼
+        ↓
 MAVLink ODOMETRY
-        │
-        ▼
-Pixhawk / PX4
-        │
-        ▼
+        ↓
+PX4
+        ↓
 vehicle_visual_odometry
 ```
 
-Для теста создан:
-
-```text
-scripts/test_odometry.py
-```
-
-Он публикует тестовую odometry с частотой 30 Hz:
+`test_odometry.py` публикует тест:
 
 ```text
 position = [1.23, 0.0, 0.0]
-orientation = identity quaternion
+orientation = [1, 0, 0, 0]
 linear velocity = 0
 angular velocity = 0
+rate = 30 Hz
 ```
 
-Используемые MAVLink frames:
+Frames:
 
 ```text
 pose frame:     MAV_FRAME_LOCAL_FRD
@@ -369,93 +294,362 @@ velocity frame: MAV_FRAME_BODY_FRD
 estimator:      MAV_ESTIMATOR_TYPE_VIO
 ```
 
-В PX4 через:
+Финальная проверка transport rate:
 
 ```text
-listener vehicle_visual_odometry 5
+IMU RX   ≈ +500 / 5 s  -> ~100 Hz
+ODOM RX  ≈ +150 / 5 s  -> ~30 Hz
+ODOM TX  ≈ +150 / 5 s  -> ~30 Hz
+TX ERR   = 0
 ```
 
-успешно получено:
+Пример:
 
 ```text
-position: [1.23000, 0.00000, 0.00000]
-q: [1.00000, 0.00000, 0.00000, 0.00000]
-velocity: [0.00000, 0.00000, 0.00000]
-angular_velocity: [0.00000, 0.00000, 0.00000]
+Traffic: IMU RX=15522 (+502) ODOM RX=2852 (+150) ODOM TX=2852 (+150) TX ERR=0
 ```
 
-Это подтверждает рабочий транспорт:
+`listener vehicle_visual_odometry 5` на PX4 показывает корректную тестовую позицию.
 
-```text
-ROS -> Jetson -> MAVLink -> PX4
-```
-
-External vision пока НЕ включён в EKF2 как источник навигации. На текущем этапе проверялся только приём ODOMETRY в PX4.
-
-Последняя версия bridge также была переработана так, чтобы каждое новое ROS odometry-сообщение отправлялось в MAVLink один раз. Финальную проверку соответствия `ODOM RX ≈ ODOM TX ≈ 30 Hz` после этой правки необходимо выполнить отдельно.
+External vision пока НЕ включён в EKF2.
 
 ---
 
-## 12. Что уже закрыто
+## 11. Ground-link monitor
+
+Добавлен:
+
+```text
+scripts/wifi_link_monitor.py
+```
+
+Ground laptop отправляет UDP heartbeat:
+
+```text
+10 Hz
+UDP port 15050
+prefix: VIO_HOMING_HEARTBEAT
+```
+
+Jetson публикует:
+
+```text
+/vio_homing/link_state
+/vio_homing/link_alive
+/vio_homing/link_age
+/vio_homing/link_packet_count
+```
+
+Логика:
+
+```text
+heartbeat age < 0.5 s  -> LINK_OK
+0.5 ... 3.0 s         -> LINK_DEGRADED
+>= 3.0 s               -> LINK_LOST
+до первого пакета      -> WAITING
+```
+
+Переходы `WAITING → LINK_OK → LINK_DEGRADED → LINK_LOST → LINK_OK` проверены.
+
+При heartbeat 10 Hz `link_age` обычно находится около `0...0.05 s`, иногда около `0.1 s`, что соответствует ожидаемой работе.
+
+Сейчас тест проводится через Ethernet. Wi-Fi-интерфейс на Jetson отсутствует, поэтому реальный AP пока не настроен.
+
+---
+
+## 12. Trajectory recorder и return path
+
+Добавлен:
+
+```text
+scripts/trajectory_recorder.py
+```
+
+Входы:
+
+```text
+/vio/odom_frd
+/vio_homing/link_state
+```
+
+Выходы:
+
+```text
+/vio_homing/trajectory
+/vio_homing/trajectory_point_count
+/vio_homing/trajectory_status
+/vio_homing/last_good_link_pose
+/vio_homing/return_path
+/vio_homing/return_ready
+```
+
+Логика:
+
+```text
+LINK_OK
+  -> пишем траекторию
+  -> обновляем last_good_link_point
+
+LINK_DEGRADED
+  -> продолжаем писать
+  -> last_good_link_point больше не обновляется
+
+LINK_LOST
+  -> строим обратный сегмент
+  -> return_ready=True
+
+LINK_OK после восстановления
+  -> старый return_path очищается
+  -> return_ready=False
+```
+
+Проверенный тест:
+
+```text
+LINK_OK
+→ LINK_DEGRADED через ~0.5 s
+→ LINK_LOST через ~3 s
+→ RETURN PATH READY
+```
+
+Пример:
+
+```text
+RETURN PATH READY: 3 points, target index=202, total trajectory=205
+LAST GOOD LINK POINT: x=1.230 y=0.000 z=0.000
+```
+
+---
+
+## 13. Автозапуск Jetson
+
+Автозапуск companion stack настроен и проверен после reboot.
+
+### UART
+
+`nvgetty` отключён.
+
+Создано udev-правило:
+
+```text
+/etc/udev/rules.d/99-vio-uart.rules
+```
+
+```text
+KERNEL=="ttyTHS1", GROUP="dialout", MODE="0660"
+```
+
+Пользователь `jetson` добавлен в `dialout`.
+
+После reboot:
+
+```text
+/dev/ttyTHS1 -> root:dialout
+crw-rw----
+```
+
+Ручной `chmod 666` больше не нужен.
+
+### systemd
+
+Создан:
+
+```text
+/etc/systemd/system/vio-homing.service
+```
+
+Сервис:
+
+```text
+enabled
+active (running)
+```
+
+После загрузки Jetson автоматически запускаются:
+
+```text
+roslaunch
+rosmaster
+rosout
+mavlink_imu_bridge.py
+wifi_link_monitor.py
+trajectory_recorder.py
+```
+
+Проверенный `rostopic list` после reboot:
+
+```text
+/pixhawk/imu
+/vio/odom_frd
+/vio_homing/last_good_link_pose
+/vio_homing/link_age
+/vio_homing/link_alive
+/vio_homing/link_packet_count
+/vio_homing/link_state
+/vio_homing/return_path
+/vio_homing/return_ready
+/vio_homing/trajectory
+/vio_homing/trajectory_point_count
+/vio_homing/trajectory_status
+```
+
+---
+
+## 14. Полный стендовый smoke-test
+
+Успешно проверена цепочка:
+
+```text
+Power ON
+   ├── Pixhawk
+   │     └── PX4
+   │          └── extras.txt
+   │               └── HIGHRES_IMU ~100 Hz
+   │
+   └── Jetson
+         └── systemd
+              └── vio-homing.service
+                    ├── rosmaster
+                    ├── MAVLink bridge
+                    ├── link monitor
+                    └── trajectory recorder
+```
+
+Далее:
+
+```text
+test_odometry.py
+      ↓ 30 Hz
+/vio/odom_frd
+      ↓
+MAVLink ODOMETRY
+      ↓
+PX4 vehicle_visual_odometry
+```
+
+И параллельно:
+
+```text
+ground heartbeat
+      ↓
+LINK_OK
+      ↓
+record trajectory
+      ↓
+heartbeat stop
+      ↓
+LINK_DEGRADED
+      ↓
+LINK_LOST
+      ↓
+return_path
+      ↓
+heartbeat restored
+      ↓
+LINK_OK
+      ↓
+return state cleared
+```
+
+Весь этот стендовый цикл проверен успешно.
+
+---
+
+## 15. Git / репозиторий
+
+Репозиторий:
+
+```text
+git@github.com:TheMrKan/vio_homing.git
+```
+
+Jetson не всегда имеет интернет. Рабочая резервная схема:
+
+```text
+Jetson
+  ↓ git bundle
+Mac
+  ↓ scp / local import
+GitHub
+```
+
+На Mac настроен SSH key для доступа к приватному репозиторию.
+
+---
+
+## 16. Что закрыто
 
 Готово:
 
 - Ethernet Mac ↔ Jetson;
-- SSH-доступ к Jetson;
+- SSH;
 - ROS Melodic;
-- собранный VINS-Fusion;
-- `vio_homing` оформлен как ROS-пакет;
-- физический UART Pixhawk ↔ Jetson;
-- стабильный MAVLink на 115200;
-- автоматическая настройка MAVLink streams после загрузки PX4;
+- VINS-Fusion собран;
+- `vio_homing` оформлен как ROS package;
+- UART Pixhawk ↔ Jetson;
+- MAVLink 115200;
+- автоматические MAVLink streams на PX4;
 - `HIGHRES_IMU` ~100 Hz;
-- offline pymavlink;
 - MAVLink → ROS IMU;
-- TIMESYNC PX4 ↔ Jetson;
-- ROS IMU timestamps;
+- TIMESYNC;
+- проверка IMU timing;
 - ROS Odometry → MAVLink ODOMETRY;
-- приём `vehicle_visual_odometry` на PX4.
+- `vehicle_visual_odometry` принимается PX4;
+- ODOM RX ≈ ODOM TX ≈ 30 Hz;
+- TX errors = 0;
+- UDP heartbeat monitor;
+- состояния link monitor;
+- запись траектории;
+- last good link point;
+- генерация reverse return path;
+- очистка return state после восстановления связи;
+- постоянные права `/dev/ttyTHS1`;
+- отключение `nvgetty`;
+- systemd autostart;
+- автоматический старт ROS stack после reboot;
+- полный стендовый smoke-test.
 
 ---
 
-## 13. Следующие задачи
+## 17. Ближайшие задачи
 
-### 1. Проверить последнюю версию ODOMETRY bridge
+### 1. Синтетический движущийся маршрут
 
-Цель:
-
-```text
-ODOM RX ≈ 30 Hz
-ODOM TX ≈ 30 Hz
-TX ERR = 0
-```
-
-### 2. Автозапуск companion stack на Jetson
-
-После включения питания Jetson должен автоматически запускать:
+Перед камерой проверить recorder на изменяющейся odometry:
 
 ```text
-ROS master
-mavlink_imu_bridge
-camera driver
-VINS-Fusion
-vio_homing
+X: 0 -> 20+ m
 ```
 
-### 3. Подключить USB-камеру
+После потери heartbeat проверить, что return path действительно идёт назад:
 
-После появления камеры:
+```text
+20 -> 19 -> 18 -> ... -> last_good_link_point
+```
+
+### 2. Wi-Fi AP на Jetson
+
+После установки совместимого Wi-Fi-адаптера:
+
+- проверить `AP` mode;
+- поднять постоянный SSID;
+- задать статический адрес;
+- включить autoconnect;
+- перенести heartbeat с Ethernet на Wi-Fi;
+- провести реальный тест потери связи.
+
+### 3. USB-камера
 
 - определить `/dev/video*`;
-- создать ROS image topic;
-- проверить частоту кадров;
-- выполнить intrinsic calibration.
+- поднять ROS image topic;
+- проверить FPS и timestamp;
+- intrinsic calibration.
 
 ### 4. Camera ↔ IMU extrinsics
 
-Необходимо определить взаимное положение и ориентацию камеры и IMU/Pixhawk.
+Получить взаимное положение и ориентацию камеры и IMU/Pixhawk.
 
-### 5. Настроить VINS-Fusion
+### 5. Реальный VINS-Fusion
 
 Входы:
 
@@ -470,70 +664,88 @@ camera image topic
 VIO pose / odometry
 ```
 
-### 6. Преобразование VINS coordinates → PX4 FRD
+### 6. VINS → PX4 FRD
 
-Перед отправкой реальной VINS odometry необходимо явно реализовать преобразование координат и ориентации в систему PX4.
+Явно реализовать и проверить преобразование координат/ориентации.
 
-### 7. Подключить external vision к EKF2
-
-Только после проверки VINS output:
+### 7. EKF2 external vision
 
 ```text
 VINS
   ↓
-ODOMETRY
+ROS Odometry
+  ↓
+MAVLink ODOMETRY
   ↓
 vehicle_visual_odometry
   ↓
 EKF2
 ```
 
-### 8. Реализовать homing state machine
+### 8. Homing manager
 
 Целевая логика:
 
 ```text
 NORMAL
   ↓
-loss of GNSS / link
-  ↓
-VIO_SWITCH
+LINK_LOST / GNSS loss
   ↓
 HOMING
   ↓
-last reliable-link point
+reverse return_path
+  ↓
+last_good_link_point
   ↓
 WAIT_LINK >= 60 s
   ↓
 LAND
 ```
 
----
+### 9. Финальный MAVLink stream set
 
-## 14. Текущий итог
-
-На текущем этапе полностью подтверждена базовая двусторонняя интеграция Jetson ↔ Pixhawk:
+Определить минимальный набор и частоты для:
 
 ```text
-Pixhawk IMU
-   ↓
-HIGHRES_IMU 100 Hz
-   ↓
-MAVLink / TELEM2
-   ↓
-Jetson
-   ↓
-ROS /pixhawk/imu
-   ↓
-future VINS-Fusion
+IMU
+attitude
+local position
+GPS/global position
+system state
+estimator state
+battery
+```
 
-future VINS odometry
-   ↓
-ROS /vio/odom_frd
-   ↓
+с учётом пропускной способности `115200`.
+
+---
+
+## 18. Текущий итог
+
+На текущем этапе автоматически стартует и работает базовый companion stack:
+
+```text
+Pixhawk
+  │
+  ├── HIGHRES_IMU ~100 Hz
+  ▼
+Jetson
+  │
+  ├── TIMESYNC
+  ├── ROS /pixhawk/imu
+  ├── link monitor
+  ├── trajectory recorder
+  └── return-path generator
+```
+
+Обратный канал проверен:
+
+```text
+ROS /vio/odom_frd ~30 Hz
+        ↓
 MAVLink ODOMETRY
-   ↓
+        ↓
 PX4 vehicle_visual_odometry
 ```
 
-То есть транспортный слой и временная синхронизация в основном готовы. Следующий крупный этап — камера, VINS-Fusion и интеграция реальной VIO odometry в PX4 EKF2.
+Главный незакрытый блок — реальная камера и VINS-Fusion. До их подключения инфраструктура ROS/MAVLink transport, времени, детектирования потери связи, записи маршрута, return path и автозапуска companion computer уже проверена на стенде.
