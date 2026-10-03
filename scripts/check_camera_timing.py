@@ -41,7 +41,9 @@ def main():
     rospy.init_node("check_camera_timing")
     topic = rospy.get_param("~image_topic", "/camera/image_raw")
     rospy.Subscriber(topic, Image, callback, queue_size=50)
+
     print("Collecting %d frames from %s..." % (COUNT, topic))
+
     rospy.spin()
 
 

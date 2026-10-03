@@ -18,10 +18,12 @@ class UsbCameraNode(object):
         self.width = int(rospy.get_param("~width", 640))
         self.height = int(rospy.get_param("~height", 480))
         self.fps = float(rospy.get_param("~fps", 30.0))
-        self.fourcc = str(rospy.get_param("~fourcc", "MJPG"))  # MJPG / YUYV, "" = драйвер по умолчанию
+        # MJPG / YUYV, "" = формат драйвера по умолчанию
+        self.fourcc = str(rospy.get_param("~fourcc", "MJPG"))
         self.grayscale = bool(rospy.get_param("~grayscale", True))
         self.frame_id = rospy.get_param("~frame_id", "camera_link")
-        self.time_offset = float(rospy.get_param("~time_offset", 0.0))  # задержка экспозиция -> grab(), с
+        # Задержка между экспозицией и возвратом grab(), с
+        self.time_offset = float(rospy.get_param("~time_offset", 0.0))
         self.reconnect_delay = float(rospy.get_param("~reconnect_delay", 2.0))
         self.max_grab_failures = int(rospy.get_param("~max_grab_failures", 10))
         self.stats_period = float(rospy.get_param("~stats_period", 5.0))
@@ -59,8 +61,13 @@ class UsbCameraNode(object):
         info.P = calib["projection_matrix"]["data"]
 
         if (info.width, info.height) != (self.width, self.height):
-            rospy.logwarn("Calibration size %dx%d != capture size %dx%d",
-                          info.width, info.height, self.width, self.height)
+            rospy.logwarn(
+                "Calibration size %dx%d != capture size %dx%d",
+                info.width,
+                info.height,
+                self.width,
+                self.height,
+            )
         rospy.loginfo("Loaded calibration %s", path)
         return info
 
@@ -81,9 +88,14 @@ class UsbCameraNode(object):
 
         code = int(cap.get(cv2.CAP_PROP_FOURCC))
         fourcc = "".join(chr((code >> 8 * i) & 0xFF) for i in range(4))
-        rospy.loginfo("Camera %s opened: %dx%d @ %.1f fps, %s", self.device,
-                      cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT),
-                      cap.get(cv2.CAP_PROP_FPS), fourcc)
+        rospy.loginfo(
+            "Camera %s opened: %dx%d @ %.1f fps, %s",
+            self.device,
+            cap.get(cv2.CAP_PROP_FRAME_WIDTH),
+            cap.get(cv2.CAP_PROP_FRAME_HEIGHT),
+            cap.get(cv2.CAP_PROP_FPS),
+            fourcc,
+        )
         return cap
 
     def close_camera(self):
@@ -94,6 +106,7 @@ class UsbCameraNode(object):
     def publish(self, frame, stamp):
         if self.grayscale and frame.ndim == 3:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
         msg = self.bridge.cv2_to_imgmsg(frame, "mono8" if frame.ndim == 2 else "bgr8")
         msg.header.stamp = stamp
         msg.header.frame_id = self.frame_id
