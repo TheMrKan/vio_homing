@@ -24,6 +24,7 @@
 ## Другое
 - **VINS Fusion** устанавливался по [официальной доке](https://github.com/hkust-aerial-robotics/vins-fusion).
 - Для него необходим **Ceres Solver**. Устанавливался по [официальной доке](http://ceres-solver.org/installation.html#linux). **Ceres Solver v1.12.0** собран, лежит в `/home/jetson/ceres-bin/`
+- Для сборки Ceres Solver пришлось **обновить Cmake** (стандартный 3.10.2 -> 3.22). Системный Cmake не тронут, обновленный 3.22 установлен в `/usr/local` через бинарник с cmake.org.
 - **ВАЖНО!** Установка с **main** ветки репозитория Ceres Solver не работает, обязательно `git checkout 1.22.0` перед сборкой (версия **1.22.0** взята из [официального Dockerfile](https://github.com/HKUST-Aerial-Robotics/VINS-Fusion/blob/be55a937a57436548ddfb1bd324bc1e9a9e828e0/docker/Dockerfile#L3)).
 - Перед запуском `catkin_make` нужно установить через `apt-get install` следующие пакеты (взяты из [официального Dockerfile](https://github.com/HKUST-Aerial-Robotics/VINS-Fusion/blob/be55a937a57436548ddfb1bd324bc1e9a9e828e0/docker/Dockerfile#L16)):
 - - `ros-melodic-cv-bridge`
@@ -31,4 +32,7 @@
 - - `ros-melodic-message-filters`
 - - `ros-melodic-tf`
 - - `ros-melodic-perception`
+- 
+
+
 
